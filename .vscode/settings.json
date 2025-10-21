@@ -1,0 +1,4 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/weather_app_venv/Scripts/python.exe",
+    "python.analysis.extraPaths": ["${workspaceFolder}/weather_app_venv/Lib/site-packages"]
+}
