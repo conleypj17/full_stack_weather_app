@@ -5,35 +5,56 @@ import asyncio
 import os
 
 
-async def main() -> None:
-  
-  # Declare the client. The measuring unit used defaults to the metric system (celcius, km/h, etc.)
-  async with python_weather.Client(unit=python_weather.IMPERIAL) as client:
-    
-    # Fetch a weather forecast from a city.
-    weather = await client.get('New York')
+async def fetch_weather(city: str, unit: str = python_weather.IMPERIAL) -> dict:
+    """Fetch weather for `city` and return a serializable dict.
 
-    print(type(weather))
-    
-    # # Fetch the temperature for today.
-    print(weather.temperature)
-    print(type(weather.temperature)) # int
-    
-    # # Fetch weather forecast for upcoming days.
-    for daily in weather:
-      print(daily)
-      print(type(daily))
-    
-    #   # Each daily forecast has their own hourly forecasts.
-      for hourly in daily:
-        print(f' --> {hourly!r}')
-        print(type(hourly))
+    This is an async function you can `await` from other async code (for example,
+    directly from a FastAPI route). A small sync wrapper `fetch_weather_sync` is
+    provided for convenience in synchronous contexts.
+    """
+
+    async with python_weather.Client(unit=unit) as client:
+        weather = await client.get(city)
+
+        result: dict = {
+            "city": city,
+            "temperature": weather.temperature,
+            "days": [],
+        }
+
+        for daily in weather:
+            day = {
+                "repr": repr(daily),
+                # try to pull common attributes if present
+                "date": getattr(daily, "date", None),
+                "temperature": getattr(daily, "temperature", None),
+                "hourly": [],
+            }
+
+            for hourly in daily:
+                day["hourly"].append({
+                    "repr": repr(hourly),
+                    # add any fields you need here, e.g. "temp": getattr(hourly, "temperature", None)
+                })
+
+            result["days"].append(day)
+
+        return result
+
+def fetch_weather_sync(city: str, unit: str = python_weather.IMPERIAL) -> dict:
+    """Synchronous wrapper for `fetch_weather` for use in sync code or quick tests."""
+    return asyncio.run(fetch_weather(city, unit=unit))
+
 
 if __name__ == '__main__':
-  
-  # See https://stackoverflow.com/questions/45600579/asyncio-event-loop-is-closed-when-getting-loop
-  # for more details.
-  if os.name == 'nt':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-  
-  asyncio.run(main())
+    # Quick manual test when running the file directly.
+    # If you hit Windows-specific asyncio issues uncomment the guarded block below.
+    # See https://stackoverflow.com/questions/45600579/asyncio-event-loop-is-closed-when-getting-loop
+    # for background.
+    # if os.name == 'nt':
+    #     wssp = getattr(asyncio, "WindowsSelectorEventLoopPolicy", None)
+    #     if wssp is not None:
+    #         asyncio.set_event_loop_policy(wssp())
+
+    data = fetch_weather_sync("New York")
+    print(data)
